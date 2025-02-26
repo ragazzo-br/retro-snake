@@ -50,6 +50,23 @@ This game is built with:
 - CSS3 (for those sweet, sweet glowing effects)
 - Love for simplicity
 
+- ## 🔄 Alternative Version
+
+**Second alternative:** If something crazy happens and the game doesn't run with the multi-file setup, try this second alternative - the full game is in a single file!
+
+```
+snake-game-all-in-one.html
+```
+
+This file contains everything (HTML, CSS, and JavaScript) in one neat package. Just download it and open it in any browser. No web server, no dependencies, no nonsense - just pure retro gaming goodness!
+
+How to use it:
+1. Download the `snake-game-all-in-one.html` file
+2. Double-click it to open in your browser
+3. Start playing immediately!
+
+Perfect for when you're trapped in a time machine back in 1975 and need a quick game fix. Or, you know, when you just want something that works with no fuss. 🕹️
+
 ## 🤝 Contributing
 
 Found a bug? Want to add a feature? Feel the nostalgic urge to contribute? Great!
