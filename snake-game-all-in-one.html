@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jogo Snake Retrô</title>
+    <style>
+        body {
+            background-color: #111;
+            color: #0f0;
+            font-family: 'Courier New', monospace;
+            text-align: center;
+            margin: 0;
+            padding: 20px;
+            overflow: hidden;
+        }
+        
+        h1 {
+            color: #0f0;
+            text-shadow: 0 0 5px #0f0;
+            margin-bottom: 10px;
+        }
+        
+        .game-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+        }
+        
+        canvas {
+            border: 4px solid #33f;
+            background-color: #000;
+            display: block;
+            margin: 0 auto;
+            box-shadow: 0 0 20px rgba(0, 255, 0, 0.5);
+        }
+        
+        .controls {
+            margin-top: 20px;
+            padding: 10px;
+            background-color: #222;
+            border: 2px solid #0f0;
+            border-radius: 5px;
+            max-width: 400px;
+        }
+        
+        .score {
+            font-size: 24px;
+            margin: 10px 0;
+            color: #ff0;
+        }
+        
+        .blink {
+            animation: blink 1s infinite;
+        }
+        
+        @keyframes blink {
+            0% { opacity: 1; }
+            50% { opacity: 0; }
+            100% { opacity: 1; }
+        }
+        
+        .btn {
+            background-color: #0f0;
+            border: none;
+            color: #000;
+            padding: 10px 20px;
+            text-align: center;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 16px;
+            margin: 10px 2px;
+            cursor: pointer;
+            font-family: 'Courier New', monospace;
+            font-weight: bold;
+            border-radius: 5px;
+            box-shadow: 0 0 10px rgba(0, 255, 0, 0.7);
+        }
+        
+        .btn:hover {
+            background-color: #0c0;
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <h1>JOGO SNAKE RETRÔ</h1>
+        <div class="score">PONTUAÇÃO: <span id="score">0</span></div>
+        <canvas id="gameCanvas" width="400" height="400"></canvas>
+        <div class="controls">
+            <p>Use as teclas de setas (↑,↓,←,→) para controlar a cobra.</p>
+            <p>Coma as maçãs para crescer e ganhar pontos.</p>
+            <button id="startBtn" class="btn">INICIAR JOGO</button>
+        </div>
+    </div>
+
+    <script>
+        // Configurações do jogo
+        const GRID_SIZE = 20;
+        const CANVAS_SIZE = 400;
+        const GRID_WIDTH = CANVAS_SIZE / GRID_SIZE;
+        const GRID_HEIGHT = CANVAS_SIZE / GRID_SIZE;
+        const FPS = 10;
+
+        // Cores
+        const BACKGROUND_COLOR = "#000000";
+        const SNAKE_COLOR = "#00FF00";
+        const APPLE_COLOR = "#FF0000";
+        const TEXT_COLOR = "#FFFFFF";
+        const BORDER_COLOR = "#3333FF";
+
+        // Direções
+        const UP = { x: 0, y: -1 };
+        const DOWN = { x: 0, y: 1 };
+        const LEFT = { x: -1, y: 0 };
+        const RIGHT = { x: 1, y: 0 };
+
+        // Elementos do DOM
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreElement = document.getElementById('score');
+        const startButton = document.getElementById('startBtn');
+
+        // Estado do jogo
+        let snake = [];
+        let direction = RIGHT;
+        let newDirection = RIGHT;
+        let apple = { x: 0, y: 0 };
+        let score = 0;
+        let gameOver = true;
+        let gameLoop = null;
+
+        // Efeitos sonoros usando o AudioContext API
+        let audioContext = null;
+
+        function initAudio() {
+            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        }
+
+        function playEatSound() {
+            if (!audioContext) return;
+            
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            
+            oscillator.type = 'sine';
+            oscillator.frequency.setValueAtTime(880, audioContext.currentTime);
+            oscillator.frequency.exponentialRampToValueAtTime(440, audioContext.currentTime + 0.1);
+            
+            gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.2);
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            oscillator.start();
+            oscillator.stop(audioContext.currentTime + 0.2);
+        }
+
+        function playGameOverSound() {
+            if (!audioContext) return;
+            
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            
+            oscillator.type = 'sawtooth';
+            oscillator.frequency.setValueAtTime(150, audioContext.currentTime);
+            oscillator.frequency.exponentialRampToValueAtTime(40, audioContext.currentTime + 1);
+            
+            gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 1);
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            oscillator.start();
+            oscillator.stop(audioContext.currentTime + 1);
+        }
+
+        // Inicialização do jogo
+        function initGame() {
+            snake = [{ x: Math.floor(GRID_WIDTH / 2), y: Math.floor(GRID_HEIGHT / 2) }];
+            direction = RIGHT;
+            newDirection = RIGHT;
+            score = 0;
+            gameOver = false;
+            scoreElement.textContent = score;
+            generateApple();
+            
+            if (gameLoop) {
+                clearInterval(gameLoop);
+            }
+            
+            gameLoop = setInterval(update, 1000 / FPS);
+            startButton.textContent = "REINICIAR";
+        }
+
+        // Geração de uma maçã em posição aleatória
+        function generateApple() {
+            const x = Math.floor(Math.random() * GRID_WIDTH);
+            const y = Math.floor(Math.random() * GRID_HEIGHT);
+            
+            // Verifica se a maçã não está sobre a cobra
+            for (let segment of snake) {
+                if (segment.x === x && segment.y === y) {
+                    return generateApple();
+                }
+            }
+            
+            apple = { x, y };
+        }
+
+        // Atualizações do jogo
+        function update() {
+            if (gameOver) return;
+            
+            // Atualiza a direção
+            direction = newDirection;
+            
+            // Calcula a nova posição da cabeça
+            const head = { ...snake[0] };
+            head.x = (head.x + direction.x + GRID_WIDTH) % GRID_WIDTH;
+            head.y = (head.y + direction.y + GRID_HEIGHT) % GRID_HEIGHT;
+            
+            // Verifica colisão com o corpo
+            for (let segment of snake) {
+                if (head.x === segment.x && head.y === segment.y) {
+                    endGame();
+                    return;
+                }
+            }
+            
+            // Adiciona a nova cabeça
+            snake.unshift(head);
+            
+            // Verifica colisão com a maçã
+            if (head.x === apple.x && head.y === apple.y) {
+                score += 10;
+                scoreElement.textContent = score;
+                generateApple();
+                playEatSound();
+            } else {
+                // Remove a cauda se não comeu uma maçã
+                snake.pop();
+            }
+            
+            // Desenha tudo
+            draw();
+        }
+
+        // Desenho dos elementos do jogo
+        function draw() {
+            // Limpa o canvas
+            ctx.fillStyle = BACKGROUND_COLOR;
+            ctx.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
+            
+            // Desenha a borda
+            ctx.strokeStyle = BORDER_COLOR;
+            ctx.lineWidth = 4;
+            ctx.strokeRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
+            
+            // Desenha a cobra
+            ctx.fillStyle = SNAKE_COLOR;
+            for (let segment of snake) {
+                ctx.fillRect(
+                    segment.x * GRID_SIZE, 
+                    segment.y * GRID_SIZE, 
+                    GRID_SIZE - 1, 
+                    GRID_SIZE - 1
+                );
+            }
+            
+            // Desenha a maçã
+            const centerX = apple.x * GRID_SIZE + GRID_SIZE / 2;
+            const centerY = apple.y * GRID_SIZE + GRID_SIZE / 2;
+            const radius = GRID_SIZE / 2 - 2;
+            
+            // Corpo da maçã
+            ctx.fillStyle = APPLE_COLOR;
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Cabinho da maçã
+            ctx.fillStyle = "#654321";
+            ctx.fillRect(
+                centerX - 1, 
+                centerY - radius - 3, 
+                2, 
+                4
+            );
+            
+            // Folhinha
+            ctx.fillStyle = "#00AA00";
+            ctx.beginPath();
+            ctx.moveTo(centerX + 2, centerY - radius - 2);
+            ctx.lineTo(centerX + 6, centerY - radius - 4);
+            ctx.lineTo(centerX + 5, centerY - radius);
+            ctx.closePath();
+            ctx.fill();
+            
+            // Texto de fim de jogo, se aplicável
+            if (gameOver) {
+                ctx.font = 'bold 30px "Courier New", monospace';
+                ctx.fillStyle = TEXT_COLOR;
+                const gameOverText = "FIM DE JOGO";
+                const textWidth = ctx.measureText(gameOverText).width;
+                ctx.fillText(
+                    gameOverText, 
+                    (CANVAS_SIZE - textWidth) / 2, 
+                    CANVAS_SIZE / 2
+                );
+                
+                ctx.font = '16px "Courier New", monospace';
+                const restartText = "PRESSIONE INICIAR PARA JOGAR NOVAMENTE";
+                const restartWidth = ctx.measureText(restartText).width;
+                ctx.fillText(
+                    restartText, 
+                    (CANVAS_SIZE - restartWidth) / 2, 
+                    CANVAS_SIZE / 2 + 30
+                );
+            }
+        }
+
+        // Finalização do jogo
+        function endGame() {
+            gameOver = true;
+            playGameOverSound();
+            draw();
+        }
+
+        // Controles de teclado
+        document.addEventListener('keydown', (event) => {
+            // Previne o comportamento padrão das setas (rolar a página)
+            if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(event.key)) {
+                event.preventDefault();
+            }
+            
+            // Muda a direção com base na tecla
+            switch (event.key) {
+                case "ArrowUp":
+                    if (direction !== DOWN) {
+                        newDirection = UP;
+                    }
+                    break;
+                case "ArrowDown":
+                    if (direction !== UP) {
+                        newDirection = DOWN;
+                    }
+                    break;
+                case "ArrowLeft":
+                    if (direction !== RIGHT) {
+                        newDirection = LEFT;
+                    }
+                    break;
+                case "ArrowRight":
+                    if (direction !== LEFT) {
+                        newDirection = RIGHT;
+                    }
+                    break;
+            }
+        });
+
+        // Botão de início/reinício
+        startButton.addEventListener('click', () => {
+            if (!audioContext) {
+                initAudio();
+            }
+            initGame();
+        });
+
+        // Desenha o estado inicial
+        draw();
+    </script>
+</body>
+</html>
